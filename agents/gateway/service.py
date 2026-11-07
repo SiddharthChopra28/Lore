@@ -25,13 +25,9 @@ from gateway.turnkey import RETRY_WINDOW_MS, lore_policies
 INGEST_TTL = 600  # an ingest must be submitted on-chain within 10 min, so it can't skip votes assigned later
 MAX_LAG = 60      # blocks (~30 s on 0G): refuse ingests while the indexer is behind, or the vote gate is blind
 NO_WALLET = "You don't have a wallet yet: create one with lore_create_wallet, then fund it with 0G."
-NO_TOKEN = ("Every Lore author needs a comfy token (https://www.comfy.fun): launch one for your agent, then link it with "
-            "lore_link_token. Buyers of topics you write in receive some of it.")
-LINK_TOKEN_MESSAGE = "Link comfy token {token} to Lore agent {wallet} on chain {chain_id}."
-BUY_SLIPPAGE_BPS = 300  # a purchase may cost up to 3% more than quoted (comfy prices move); the rest is refunded
 BANNED = "You were removed from Lore after a proven leak of paid research; you can't buy, read, submit or vote."
-POLICY_CALLS = {"Submissions": ["submit", "vote"], "Access": ["buy"], "Royalties": ["claim"], "Reports": ["report"],
-                "LockVault": ["claim"]}  # everything Lore may sign from a user's wallet
+# everything Lore may sign from a user's wallet
+POLICY_CALLS = {"Submissions": ["submit", "vote"], "Access": ["buy"], "Royalties": ["claim"], "Reports": ["report"]}
 
 
 class LoreError(ToolError):
@@ -137,62 +133,14 @@ class Service:
             with self.tx() as conn:  # the indexer records it too; this makes the wallet usable right away
                 conn.execute("INSERT OR IGNORE INTO persons VALUES (?, ?)", (address, person.lower()))
         return {"address": address, "next": "fund it with 0G, then you can buy, submit and vote. Lore can spend this"
-                " wallet on Lore actions, so keep only what you mean to spend here. To submit research, also link a comfy"
-                " token for it (lore_link_token)"}
-
-    # --- author tokens (comfy) ---
-    def link_token_message(self, wallet: str, token: str) -> str:
-        return LINK_TOKEN_MESSAGE.format(token=token.lower(), wallet=wallet.lower(), chain_id=self.chain.chain_id)
-
-    def link_token(self, person: str, token: str, signature: str, wallet: str | None = None) -> dict:
-        """Link the comfy token `token` to one of the person's wallets, on-chain (AuthorTokens; we are REGISTRAR).
-        Proof of control: comfy's Launched record names the token's creator, and the creator signed
-        link_token_message, so nobody can claim someone else's token."""
-        from eth_account import Account
-        from eth_account.messages import encode_defunct
-
-        with self.tx() as conn:
-            w = self._wallet(conn, person, wallet)
-        launch = self.chain.comfy_launch(token)
-        if launch is None:
-            raise LoreError(f"{token} wasn't launched on comfy (no Launched record), so it can't be an author token")
-        try:
-            signer = Account.recover_message(encode_defunct(text=self.link_token_message(w, token)), signature=signature)
-        except Exception as e:
-            raise LoreError(f"unreadable signature: {e}") from e
-        if signer.lower() != launch["creator"]:
-            raise LoreError(f"sign the message with the wallet that launched the token on comfy ({launch['creator']})")
-        if self.chain.author_token(w) != token.lower():
-            self.chain.send("AuthorTokens", "link", self.chain.w3.to_checksum_address(w), bytes.fromhex(launch["pool_id"][2:]))
-        return {"wallet": w, "token": token.lower(), "pool_id": launch["pool_id"]}
-
-    def my_tokens(self, person: str) -> dict:
-        """Author tokens this person's wallets received for topics they bought, locked or ready to claim."""
-        with self.tx() as conn:
-            mine = self.wallets(conn, person)
-            bought = conn.execute(f"SELECT DISTINCT buyer, topic_id FROM purchases WHERE buyer IN "
-                                  f"({','.join('?' * len(mine))})", mine).fetchall() if mine else []
-        locks, now = {}, self.now()
-        for r in bought:
-            for t in self.chain.basket_tokens(r["topic_id"]):
-                lock = self.chain.lock(r["buyer"], t)
-                if lock["amount"]:
-                    locks[(r["buyer"], lock["token"])] = {**lock, "wallet": r["buyer"], "claimable": now >= lock["unlock_at"]}
-        return {"locks": list(locks.values())}
-
-    def prepare_claim_tokens(self, person: str) -> dict:
-        ready = [lock for lock in self.my_tokens(person)["locks"] if lock["claimable"]]
-        if not ready:
-            raise LoreError("no author tokens are unlocked yet (lore_my_tokens shows when they unlock)")
-        return {"transactions": [self.chain.prepare("LockVault", "claim", lk["wallet"], self.chain.w3.to_checksum_address(lk["token"]))
-                                 for lk in ready]}
+                " wallet on Lore actions, so keep only what you mean to spend here."}
 
     def wallet_info(self, person: str) -> dict:
         with self.tx() as conn:
             mine = self.wallets(conn, person)
             managed = {r[0] for r in conn.execute("SELECT address FROM turnkey_wallets WHERE person=? AND ready",
                                                   (person,))}
-        return {"wallets": [{"address": w, "lore_can_sign": w in managed, "author_token": self.chain.author_token(w),
+        return {"wallets": [{"address": w, "lore_can_sign": w in managed, "author_token": None,
                              **self.chain.balances(w)} for w in mine]}
 
     # --- human checkpoints (World ID Agent Pass): Lore signs nothing for an agent until its person approves ---
@@ -419,8 +367,6 @@ class Service:
             w = self._wallet(conn, person, wallet)
             if self.chain.is_banned(w):
                 raise LoreError(BANNED)
-            if self.chain.author_token(w) is None:  # Submissions.submit would revert: say why before uploading
-                raise LoreError(NO_TOKEN)
             if self.chain.latest() - synced_block(conn) > MAX_LAG:
                 raise LoreError("Lore is catching up with the chain; try again in a few seconds")
             if self._vote_tasks(conn, person):  # vote-before-submit, per person
@@ -447,10 +393,9 @@ class Service:
             w = self._wallet(conn, person, wallet)
         if self.chain.is_banned(w):
             raise LoreError(BANNED)
-        quote = self.chain.quote_buy(tid)  # base + each author's tokens at comfy's live price
-        max_price = quote["total_wei"] * (10_000 + BUY_SLIPPAGE_BPS) // 10_000  # unspent 0G comes back
-        return {**quote, "max_wei": max_price, "lock_days": self.chain.lock_period() // 86400,
-                "transactions": [self.chain.prepare("Access", "buy", w, tid, value=max_price)]}
+        quote = self.chain.quote_buy(tid)
+        return {**quote, "max_wei": quote["total_wei"],
+                "transactions": [self.chain.prepare("Access", "buy", w, tid, value=quote["total_wei"])]}
 
     def read_topic(self, person: str, tid: int) -> dict:
         with self.tx() as conn:
@@ -655,7 +600,7 @@ class Service:
                 if not n:
                     raise LookupError("no such node")
                 return {"topic_id": n["topic_id"], "ingested": True, "meta_hash": n["meta_hash"],
-                        "contributor": n["contributor"], "author_token": self.chain.author_token(n["contributor"]),
+                        "contributor": n["contributor"],
                         "synced_block": synced_block(conn), "text": self.plaintext(n["content_hash"], n["storage_root"])}
             s = conn.execute("SELECT * FROM submissions WHERE id=?", (iid,)).fetchone()
             if not s:

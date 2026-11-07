@@ -27,7 +27,7 @@ from turnkey_api_key_stamper import ApiKeyStamper, ApiKeyStamperConfig
 API = "https://api.turnkey.com"
 DONE = "ACTIVITY_STATUS_COMPLETED"
 FAILED = {"ACTIVITY_STATUS_FAILED", "ACTIVITY_STATUS_REJECTED"}
-MAX_GAS = 5_000_000  # per transaction, in the policies and the Signer: a 10-author purchase is 10 comfy swaps
+MAX_GAS = 5_000_000  # per transaction, in the policies and the Signer
 # 0G a paying call (Access.buy, Submissions.submit) may carry; every other Lore call carries none.
 # ponytail: one cap for both; Turnkey compared `eth.tx.value == 0` in spike T1, a large `<=` is not yet verified live.
 MAX_VALUE_WEI = 10 * 10**18

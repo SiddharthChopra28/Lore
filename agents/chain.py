@@ -24,9 +24,8 @@ def hexstr(b) -> str:
 
 
 class Chain:
-    def __init__(self, rpc: str, contracts: dict[str, str], key: str | None = None, chain_id: int | None = None,
-                 comfy_from_block: int = 0):
-        self.chain_id, self.comfy_from_block = chain_id, comfy_from_block
+    def __init__(self, rpc: str, contracts: dict[str, str], key: str | None = None, chain_id: int | None = None):
+        self.chain_id = chain_id
         self.w3 = Web3(Web3.HTTPProvider(rpc))
         self.c = {n: self.w3.eth.contract(address=Web3.to_checksum_address(a), abi=shared.abi(n))
                   for n, a in contracts.items()}
@@ -37,7 +36,7 @@ class Chain:
     @classmethod
     def for_chain(cls, chain_id: int, key: str | None = None, rpc: str | None = None) -> "Chain":
         dep = shared.deployment(chain_id)
-        return cls(rpc or shared.network(chain_id).rpc_url, dep["contracts"], key, chain_id, dep.get("comfyFromBlock", 0))
+        return cls(rpc or shared.network(chain_id).rpc_url, dep["contracts"], key, chain_id)
 
     @staticmethod
     def _a(addr: str) -> str:
@@ -91,59 +90,13 @@ class Chain:
         return "0x" + function_abi_to_4byte_selector(entry).hex()
 
     def balances(self, addr: str) -> dict:
-        """Native 0G in wei: Lore is paid in 0G (stakes, topics, author tokens) and 0G pays the gas."""
+        """Native 0G in wei: Lore is paid in 0G (stakes, topics) and 0G pays the gas."""
         return {"native_wei": self.w3.eth.get_balance(self._a(addr))}
 
-    # --- author tokens (comfy) ---
-    def author_token(self, agent: str) -> str | None:
-        """The comfy token linked to `agent` in AuthorTokens, or None."""
-        t = self.c["AuthorTokens"].functions.tokenOf(self._a(agent)).call()
-        return None if int(t, 16) == 0 else t.lower()
-
-    def comfy_launch(self, token: str) -> dict | None:
-        """comfy's Launched record for `token`: {"pool_id", "creator"}, or None if comfy didn't launch it.
-        Scans the launcher's logs from comfyFromBlock in 100k-block pages (comfy's docs ask for that page size)."""
-        ev = self.c["ComfyLauncher"].events.Launched
-        topic = "0x" + bytes(12).hex() + token.lower().removeprefix("0x")
-        start, head = self.comfy_from_block, self.w3.eth.block_number
-        for frm in range(start, head + 1, 100_000):
-            logs = self.w3.eth.get_logs({"address": self.c["ComfyLauncher"].address, "fromBlock": frm,
-                                         "toBlock": min(frm + 99_999, head),
-                                         "topics": [ev.build_filter().topics[0], None, topic]})
-            if logs:
-                a = ev.process_log(logs[0])["args"]
-                return {"pool_id": "0x" + bytes(a["poolId"]).hex(), "creator": a["creator"].lower()}
-        return None
-
     def quote_buy(self, topic_id: int) -> dict:
-        """What buying `topic_id` costs right now: the base price plus each author's tokens at comfy's live price
-        and charges. Each purchase is simulated against comfy's router (eth_call with a temporary balance)."""
-        acc = self.c["Access"].functions
-        base = acc.priceOf(topic_id).call()
-        authors, counts = self.c["TopicGraph"].functions.topicAuthors(topic_id).call()
-        per_node = acc.tokensPerNode().call()
-        router, sim = self.c["ComfyRouter"], Web3.to_checksum_address("0x" + "00" * 18 + "c0fe")
-        out = []
-        for author, n in zip(authors, counts):
-            key = self.c["AuthorTokens"].functions.keyOf(author).call()
-            amount = n * per_node
-            call = {"from": sim, "to": router.address, "value": 10**27,
-                    "data": router.encode_abi("buyExactWithNative", args=[key, amount, sim, 2**40])}
-            raw = self.w3.eth.call(call, "latest", {sim: {"balance": hex(10**28)}})
-            out.append({"author": author.lower(), "token": key[1].lower(), "nodes": n, "amount": amount,
-                        "cost_wei": int.from_bytes(raw[-32:], "big")})
-        return {"base_wei": base, "authors": out, "total_wei": base + sum(a["cost_wei"] for a in out)}
-
-    def basket_tokens(self, topic_id: int) -> list[str]:
-        """The author tokens a buyer of `topic_id` receives (Access.basket)."""
-        return [t.lower() for t in self.c["Access"].functions.basket(topic_id).call()[0]]
-
-    def lock_period(self) -> int:
-        return self.c["LockVault"].functions.lockPeriod().call()
-
-    def lock(self, owner: str, token: str) -> dict:
-        amount, unlock_at = self.c["LockVault"].functions.locks(self._a(owner), self._a(token)).call()
-        return {"token": token.lower(), "amount": amount, "unlock_at": unlock_at}
+        """What buying `topic_id` costs: the base price only (Access.priceOf)."""
+        base = self.topic_price(topic_id)
+        return {"base_wei": base, "authors": [], "total_wei": base}
 
     def address(self, contract: str) -> str:
         return self.c[contract].address
@@ -158,13 +111,11 @@ class Chain:
         """Live economic parameters (all settable by ADMIN), for the public explorer."""
         sub, acc, roy = self.c["Submissions"].functions, self.c["Access"].functions, self.c["Royalties"].functions
         return {"stake": sub.stake().call(), "stake_fee": sub.stakeFee().call(), "node_value": acc.nodeValue().call(),
-                "tokens_per_node": acc.tokensPerNode().call(), "max_authors": acc.maxAuthors().call(),
                 "platform_cut_bps": roy.platformCutBps().call(), "quorum_bps": sub.quorumBps().call(),
                 "voting_window": sub.votingWindow().call()}
 
     def topic_price(self, topic_id: int) -> int:
-        """The base price, nodeValue x the topic's accepted nodes (Access.priceOf), live. Buying also pays for the
-        authors' comfy tokens at market price: quote_buy has the full amount."""
+        """The price, nodeValue x the topic's accepted nodes (Access.priceOf), live."""
         return self.c["Access"].functions.priceOf(topic_id).call()
 
     def latest(self) -> int:

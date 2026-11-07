@@ -12,14 +12,8 @@ def load_deployment(chain_id: int) -> dict:
     return json.loads(files("lore_shared").joinpath(f"deployments/{chain_id}.json").read_text())
 
 
-# comfy's router, pool manager and launcher: MockComfy has the same functions and Launched event (spike C1).
-COMFY_ABI = {"ComfyRouter": "MockComfy", "ComfyPoolManager": "MockComfy", "ComfyLauncher": "MockComfy"}
-
-
 def load_abi(name: str) -> list:
-    name = COMFY_ABI.get(name, name)
-    if name not in {"Access", "LoreRoles", "Reports", "Royalties", "Submissions", "TopicGraph", "PersonRegistry",
-                    "AuthorTokens", "LockVault", "MockComfy"}:
+    if name not in {"Access", "LoreRoles", "Reports", "Royalties", "Submissions", "TopicGraph", "PersonRegistry"}:
         raise ValueError("unknown Lore contract")
     return json.loads(files("lore_shared").joinpath(f"abi/{name}.json").read_text())
 
@@ -53,10 +47,7 @@ class ChainReader:
                 raise ValueError(f"missing deployed code: {name}")
         wiring = [
             ("Access", "graph", "TopicGraph"), ("Access", "royalties", "Royalties"),
-            ("Access", "authorTokens", "AuthorTokens"), ("Access", "vault", "LockVault"),
-            ("Access", "router", "ComfyRouter"), ("Submissions", "graph", "TopicGraph"),
-            ("Submissions", "authorTokens", "AuthorTokens"), ("Royalties", "graph", "TopicGraph"),
-            ("LockVault", "access", "Access"), ("AuthorTokens", "poolManager", "ComfyPoolManager"),
+            ("Submissions", "graph", "TopicGraph"), ("Royalties", "graph", "TopicGraph"),
             ("Royalties", "access", "Access"), ("Reports", "graph", "TopicGraph"),
             ("TopicGraph", "registry", "PersonRegistry"), ("PersonRegistry", "roles", "LoreRoles"),
         ]

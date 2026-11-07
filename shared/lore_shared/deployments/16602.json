@@ -1,13 +1,7 @@
 {
   "chainId": 16602,
-  "comfyFromBlock": 64265669,
   "contracts": {
     "Access": "0xeC0917Aba767763dF684153F00A07075f94252aa",
-    "AuthorTokens": "0x14144Caa6C8C3f348B5491613bBeA00654eb9243",
-    "ComfyLauncher": "0x87ed103E44C20BdD8C2dCBb0471801A98e69A023",
-    "ComfyPoolManager": "0x87ed103E44C20BdD8C2dCBb0471801A98e69A023",
-    "ComfyRouter": "0x87ed103E44C20BdD8C2dCBb0471801A98e69A023",
-    "LockVault": "0x2142e0D7a43D3d70486b700977F7B4A520b3a2f9",
     "LoreRoles": "0x3314C83691e710B269Afdc1169c22e66D88E3d21",
     "PersonRegistry": "0x03275fB4fC68BDc2FAFE70b6a9e2b1Bcede33162",
     "Reports": "0xa2Ac482Bc22926e3607903A16B53cB8597cb8947",
@@ -16,7 +10,6 @@
     "TopicGraph": "0xDBa598c229764754d9D7E2C18761cfA82568BeEc"
   },
   "deployBlock": 64265669,
-  "mockComfy": true,
   "roles": {
     "admin": "0x338013B3F7c87Dc06Fc79B1cB3AEcb6941AE64e8",
     "curator": "0x44af9e66599acfA9C27B237BA2CEa74E1aBF42fc",

@@ -15,8 +15,6 @@ contract SubmissionsTest is Base {
         super.setUp();
         _ensurePerson(alice); // World ID: needed to submit, and to vote
         _ensurePerson(bob);
-        _ensureToken(alice); // a comfy token: needed to submit
-        _ensureToken(bob);
     }
 
     // ---------- submit ----------

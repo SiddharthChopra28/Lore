@@ -15,7 +15,7 @@ contract AccessTest is Base {
     function test_buy_mintsAndGrantsAccess() public {
         (uint256 t,) = _newTopic(alice);
         assertFalse(access.hasAccess(t, buyer));
-        uint256 cost = _cost(t);
+        uint256 cost = access.priceOf(t);
         _fund(buyer, cost);
         vm.expectEmit(address(access));
         emit IAccess.Bought(t, buyer);
@@ -74,7 +74,7 @@ contract AccessTest is Base {
     function test_setParams_onlyAdmin() public {
         vm.prank(buyer);
         vm.expectRevert(LoreBase.NotAuthorized.selector);
-        access.setParams(1, 1, 1);
+        access.setParams(1);
     }
 
     function test_price_isNodeValueTimesNodes() public {
@@ -83,7 +83,7 @@ contract AccessTest is Base {
         _addNode(makeAddr("bob"), t);
         _addNode(makeAddr("carol"), t);
         assertEq(access.priceOf(t), 3 * PRICE);
-        access.setParams(2 * PRICE, access.tokensPerNode(), access.maxAuthors());
+        access.setParams(2 * PRICE);
         assertEq(access.priceOf(t), 6 * PRICE);
         uint256 before = _bal(address(royalties));
         _buy(buyer, t);
@@ -131,7 +131,7 @@ contract RoyaltiesTest is Base {
     }
 
     function test_dustToTreasury() public {
-        access.setParams(7, access.tokensPerNode(), access.maxAuthors());
+        access.setParams(7);
         (uint256 t, uint256 n1) = _newTopic(alice);
         uint256 n2 = _addNode(bob, t);
         uint256 n3 = _addNode(makeAddr("carol"), t);

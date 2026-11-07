@@ -17,19 +17,6 @@
   },
   {
     "type": "function",
-    "name": "authorTokens",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "contract AuthorTokens"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "canFinalize",
     "inputs": [
       {
@@ -300,19 +287,6 @@
   },
   {
     "type": "function",
-    "name": "setAuthorTokens",
-    "inputs": [
-      {
-        "name": "a",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "setParams",
     "inputs": [
       {
@@ -480,19 +454,6 @@
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "event",
-    "name": "AuthorTokensSet",
-    "inputs": [
-      {
-        "name": "authorTokens",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
   },
   {
     "type": "event",
@@ -712,17 +673,6 @@
     "type": "error",
     "name": "NewTopicNoVoting",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "NoAuthorToken",
-    "inputs": [
-      {
-        "name": "agent",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
   },
   {
     "type": "error",

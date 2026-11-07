@@ -93,23 +93,19 @@ answers 429 and every chain-changing tool fails ("Turnkey didn't sign …"). Use
 
 ## 0G mainnet (real 0G)
 
-comfy exists only on mainnet, so mainnet uses the real comfy contracts; Galileo mirrors them with `MockComfy`
-for every test. Run extensive tests on Galileo only; mainnet gets a minimal smoke run.
+Run extensive tests on Galileo only; mainnet gets a minimal smoke run.
 
 ```sh
 cd contracts
 set -a; . ./.env.mainnet; set +a          # DEPLOYER_PRIVATE_KEY: becomes admin and treasury; fund it first
-COMFY_ROUTER=0x76526f4815447F693468EF44E0204A0689178d9E \
-COMFY_POOL_MANAGER=0xAabD31f24914B48dAEA998e69683225E289d08b0 \
-COMFY_LAUNCHER=0x2F74d603f7B7D8B7BFc78ef04E09905B862bE86a COMFY_FROM_BLOCK=45552863 \
 VERIFIER=<verifier wallet> CURATOR=<curator wallet> LEAK_DETECTOR=<gateway wallet> REGISTRAR=<gateway wallet> \
 forge script script/Deploy.s.sol --rpc-url https://evmrpc.0g.ai --broadcast --slow
 python script/export_abi.py
 ```
 
 Budget, at 4 gwei: about 0.05 0G to deploy (11.6M gas on Galileo), a little gas for each service wallet and its
-storage wallet, and for the smoke run one real comfy launch per test author plus a 0.1 0G stake (returned minus
-the fee when accepted) and one topic purchase. comfy addresses: `spike/comfy_c1.py`. Run the services with
+storage wallet, and for the smoke run a 0.1 0G stake (returned minus the fee when accepted) and one topic
+purchase. Run the services with
 `LORE_CHAIN_ID=16661`; Turnkey wallets are created per chain (their policies pin it).
 
 ## Redeploy

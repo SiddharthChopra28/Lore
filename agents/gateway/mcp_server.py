@@ -21,8 +21,7 @@ vote tasks you must vote on them (lore_get_vote_task, then lore_vote) before you
 Before buying, submitting or voting you need a wallet: lore_create_wallet once, then fund it with 0G (lore_wallet
 shows its address and balance). Lore signs only Lore's own transactions from it, so funds can only go to Lore's
 contracts; tell the user to keep in it only what they mean to spend on Lore. Everything on Lore is paid in 0G.
-Every author needs a comfy token (comfy.fun, 0G's token launchpad): launch one for your agent, then lore_link_token.
-Buying a topic pays a base price to its authors and buys each author's comfy token for you (locked 30 days).
+Buying a topic pays its price to the topic's authors.
 Tool results end with a short "Lore inbox" notice when something is pending."""
 
 
@@ -82,34 +81,26 @@ def build_mcp(service, oauth, public_url: str) -> MCPServer:
     def lore_create_wallet(email: str) -> dict:
         """Create your Lore wallet (once). It lives in your own Turnkey account, reachable by this email: you are its
         only owner and can revoke Lore's access at any time. Lore may sign only Lore's calls (submit, vote, buy,
-        claim, report, claim locked tokens), so funds can only go to Lore's contracts, but Lore can spend whatever
+        claim, report), so funds can only go to Lore's contracts, but Lore can spend whatever
         is in it on those. Fund it with only the 0G you mean to spend on Lore."""
         return service.create_wallet(person(), email)
 
     @tool
     def lore_wallet() -> dict:
-        """Your wallets, whether Lore can sign for each, their 0G balance (wei) and their comfy author token."""
+        """Your wallets, whether Lore can sign for each, and their 0G balance (wei)."""
         return service.wallet_info(person())
 
     @tool
-    def lore_link_token(token: str, signature: str = "", wallet: str = "") -> dict:
-        """Link your agent's comfy token (needed before you can submit research). Launch it on comfy.fun first.
-        Call without a signature to get the message; sign it (EIP-191 personal_sign) with the wallet that launched
-        the token on comfy, then call again with the signature."""
+    def lore_link_token(token: str = "", signature: str = "", wallet: str = "") -> dict:
+        """Kept for older clients: Lore no longer uses author tokens, so this accepts anything and does nothing."""
         if not signature:
-            w = service.whoami(person())["wallets"]
-            target = wallet or (w[0] if len(w) == 1 else "")
-            if not target:
-                raise LoreError("say which of your wallets the token is for (wallet=...)")
-            return {"sign_this": service.link_token_message(target, token),
-                    "how": "EIP-191 personal_sign with the wallet that launched the token on comfy, then call "
-                           "lore_link_token again with signature."}
-        return service.link_token(person(), token, signature, wallet or None)
+            return {"sign_this": "Lore no longer uses author tokens; this signature is ignored.",
+                    "how": "Nothing to do: author tokens are not needed to submit."}
+        return {"ignored": True, "note": "Lore no longer uses author tokens; nothing was linked."}
 
     @tool
     def lore_list_topics() -> dict:
-        """Every topic with its public title, description, node count, base price (0G wei; buying also buys the
-        authors' comfy tokens, see lore_buy) and proof badge."""
+        """Every topic with its public title, description, node count, price (0G wei) and proof badge."""
         return {"topics": [{**t, "meta": with_badge(t["meta"])} for t in service.topics()]}
 
     @tool
@@ -145,8 +136,8 @@ def build_mcp(service, oauth, public_url: str) -> MCPServer:
 
     @tool
     def lore_submit(text: str, topic_id: int = 0, wallet: str = "", confirm: bool = False) -> dict:
-        """Submit research to a topic (topic_id 0 starts a new topic). Stakes 0G from your wallet, and needs your
-        comfy token linked (lore_link_token). Call with confirm=true to store the research and submit it."""
+        """Submit research to a topic (topic_id 0 starts a new topic). Stakes 0G from your wallet.
+        Call with confirm=true to store the research and submit it."""
         if not confirm:
             return {"confirm": f"This stakes {service.chain.stake() / 1e18:g} 0G. It comes back minus a small fee if"
                                " accepted, and goes to the platform if rejected. Call again with confirm=true."}
@@ -156,18 +147,14 @@ def build_mcp(service, oauth, public_url: str) -> MCPServer:
 
     @tool
     def lore_buy(topic_id: int, wallet: str = "", confirm: bool = False) -> dict:
-        """Buy permanent access to a whole topic, including future nodes. Pays 0G from your wallet: a base price
-        that goes to the topic's authors, plus each author's comfy token at its market price, which you receive
-        (locked for 30 days in Lore's vault, then yours to keep or trade on comfy)."""
+        """Buy permanent access to a whole topic, including future nodes. Pays the topic's price in 0G from your
+        wallet; it goes to the topic's authors."""
         q = service.chain.quote_buy(topic_id)
         if not confirm:
-            return {"confirm": f"This costs about {q['total_wei'] / 1e18:.6g} 0G for permanent access to topic {topic_id}:"
-                               f" {q['base_wei'] / 1e18:.6g} 0G to its authors, plus their comfy tokens at market price."
-                               " Up to 3% more may be charged if prices move; the rest is refunded. Call again with"
-                               " confirm=true.", "quote": q}
+            return {"confirm": f"This costs {q['total_wei'] / 1e18:.6g} 0G for permanent access to topic {topic_id},"
+                               " paid to its authors. Call again with confirm=true.", "quote": q}
         prepared = service.prepare_buy(person(), topic_id, wallet or None)
-        return service.checkpoint(person(), f"pay up to {prepared['max_wei'] / 1e18:.6g} 0G for topic {topic_id} and"
-                                  " its authors' comfy tokens", prepared)
+        return service.checkpoint(person(), f"pay {prepared['max_wei'] / 1e18:.6g} 0G for topic {topic_id}", prepared)
 
     @tool
     def lore_read_topic(topic_id: int) -> dict:
@@ -186,13 +173,8 @@ def build_mcp(service, oauth, public_url: str) -> MCPServer:
 
     @tool
     def lore_my_tokens() -> dict:
-        """Author tokens you received for topics you bought: amounts, and when each unlocks."""
-        return service.my_tokens(person())
-
-    @tool
-    def lore_claim_tokens() -> dict:
-        """Move your unlocked author tokens from Lore's vault to your wallet (then trade them on comfy if you like)."""
-        return service.checkpoint(person(), "claim unlocked author tokens", service.prepare_claim_tokens(person()))
+        """Kept for older clients: Lore no longer uses author tokens, so this is always empty."""
+        return {"locks": []}
 
     @tool
     def lore_report_leak(topic_id: int, text: str, wallet: str = "") -> dict:

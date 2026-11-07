@@ -102,11 +102,11 @@ def test_create_wallet_runs_the_delegated_access_setup_in_order_and_replays_exac
 
 
 def test_policies_pin_chain_contracts_selectors_and_value():
-    contracts = {n: "0x" + c * 40 for n, c in zip(("Submissions", "Access", "Royalties", "Reports", "LockVault"), "abcde")}
+    contracts = {n: "0x" + c * 40 for n, c in zip(("Submissions", "Access", "Royalties", "Reports"), "abcd")}
     sels = {"Submissions.submit": "0x11111111", "Submissions.vote": "0x22222222", "Access.buy": "0x33333333",
-            "Royalties.claim": "0x44444444", "Reports.report": "0x55555555", "LockVault.claim": "0x66666666"}
+            "Royalties.claim": "0x44444444", "Reports.report": "0x55555555"}
     ps = {p["policyName"]: p["condition"] for p in lore_policies("u-lore", 16602, contracts, sels)}
-    assert len(ps) == 6 and all(c.startswith(f"eth.tx.chain_id == 16602 && eth.tx.gas <= {MAX_GAS} && ")
+    assert len(ps) == 5 and all(c.startswith(f"eth.tx.chain_id == 16602 && eth.tx.gas <= {MAX_GAS} && ")
                                 for c in ps.values())
     for call, cond in ps.items():  # 0G leaves the wallet only in a purchase or a stake, capped
         paying = call in ("Lore: Access.buy", "Lore: Submissions.submit")

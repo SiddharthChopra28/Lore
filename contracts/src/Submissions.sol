@@ -2,7 +2,6 @@
 pragma solidity ^0.8.24;
 
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {AuthorTokens} from "./AuthorTokens.sol";
 import {ISubmissions} from "./interfaces/ILore.sol";
 import {LoreBase} from "./LoreBase.sol";
 import {LoreRoles} from "./LoreRoles.sol";
@@ -36,8 +35,6 @@ contract Submissions is ISubmissions, LoreBase {
     uint8 internal constant VOTE_NO = 2;
 
     TopicGraph public immutable graph;
-    /// @notice Every author must have a comfy token linked before submitting.
-    AuthorTokens public authorTokens;
 
     uint256 public stake = Constants.STAKE;
     uint256 public stakeFee = Constants.STAKE_FEE;
@@ -51,7 +48,6 @@ contract Submissions is ISubmissions, LoreBase {
     mapping(uint256 => mapping(bytes32 => uint8)) public voteOf;
 
     event ParamsSet(uint256 stake, uint256 stakeFee, uint256 votingWindow, uint256 quorumBps);
-    event AuthorTokensSet(address authorTokens);
 
     error UnknownTopic(uint256 topicId);
     error UnknownSubmission(uint256 subId);
@@ -65,7 +61,6 @@ contract Submissions is ISubmissions, LoreBase {
     error NotFinalizable();
     error NotRegistered(address agent);
     error Banned(address agent);
-    error NoAuthorToken(address agent);
     error WrongStake(uint256 stake, uint256 sent);
 
     constructor(LoreRoles roles_, TopicGraph graph_) LoreBase(roles_) {
@@ -74,12 +69,6 @@ contract Submissions is ISubmissions, LoreBase {
     }
 
     // ---------- admin ----------
-
-    function setAuthorTokens(address a) external onlyAdmin {
-        if (a == address(0)) revert ZeroAddress();
-        authorTokens = AuthorTokens(a);
-        emit AuthorTokensSet(a);
-    }
 
     /// @notice quorumBps must be >= 50%: early finalize relies on "one side alone above quorum" meaning
     ///         that side already holds a strict majority of every eligible voter, so the result can't change.
@@ -108,9 +97,6 @@ contract Submissions is ISubmissions, LoreBase {
         if (topicId != 0 && !graph.topicExists(topicId)) revert UnknownTopic(topicId);
         if (_personOf(msg.sender) == bytes32(0)) revert NotRegistered(msg.sender); // World ID first
         if (graph.registry().isBanned(msg.sender)) revert Banned(msg.sender);
-        if (address(authorTokens) == address(0) || authorTokens.tokenOf(msg.sender) == address(0)) {
-            revert NoAuthorToken(msg.sender);
-        }
         if (msg.value != stake) revert WrongStake(stake, msg.value);
         if (contentHashUsed[contentHash]) revert DuplicateContent(contentHash);
         contentHashUsed[contentHash] = true;

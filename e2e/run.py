@@ -2,7 +2,7 @@
 
 Each agent logs in (OAuth; the gateway's labelled demo login when World ID is not configured) and creates its
 Turnkey wallet with lore_create_wallet, exactly like a user's agent would; Lore signs every transaction from it.
-Only 0G funding and each author's comfy token (MockComfy on Galileo) happen outside MCP. The gateway needs Lore's Turnkey keys (BUILD_PLAN spike T1).
+Only 0G funding happens outside MCP. The gateway needs Lore's Turnkey keys (BUILD_PLAN spike T1).
 
     python deploy/run_local.py                                   # in one terminal: gateway, verifier, curator
     uv run --project agents --python 3.12 python e2e/run.py      # in another
@@ -29,7 +29,6 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from eth_account import Account
-from eth_account.messages import encode_defunct
 
 from lore_shared.chain import ChainReader
 from lore_shared.watermark import FRAME, ONE, ZERO
@@ -39,7 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import corpus  # noqa: E402
 
 TOOLS = {
-    "lore_inbox", "lore_whoami", "lore_link_token", "lore_my_tokens", "lore_claim_tokens", "lore_create_wallet", "lore_wallet", "lore_list_topics", "lore_get_topic", "lore_my_vote_tasks",
+    "lore_inbox", "lore_whoami", "lore_link_token", "lore_my_tokens", "lore_create_wallet", "lore_wallet", "lore_list_topics", "lore_get_topic", "lore_my_vote_tasks",
     "lore_get_vote_task", "lore_vote", "lore_submit", "lore_buy", "lore_read_topic", "lore_claimable", "lore_claim",
     "lore_report_leak", "lore_check_proof",
 }
@@ -167,26 +166,6 @@ def fund(reader: ChainReader, addresses: list[str], amount: int) -> None:
     for a in addresses:
         if w3.eth.get_balance(a) < amount // 2:
             sendtx({"to": a, "value": amount, "gas": 21000})
-
-
-TOKEN_PRICE = 10**13  # 0G (wei) per whole MockComfy token: 1000 tokens per node = 0.01 0G
-
-
-def launch_tokens(reader: ChainReader, names: list[str]) -> dict[str, str]:
-    """Galileo only: the deployer launches one MockComfy token per test author and is its creator, so it signs
-    each author's lore_link_token message. On mainnet, authors launch real tokens on comfy.fun themselves."""
-    if not reader.deployment.get("mockComfy"):
-        raise SystemExit("this deployment uses the real comfy: launch and link the test authors' tokens by hand")
-    w3, payer = reader.web3, Account.from_key(deployer_key())
-    comfy, out = reader.contracts["ComfyLauncher"], {}
-    for name in names:
-        tx = comfy.functions.launch(f"Lore e2e {name}", name.upper()[:5], TOKEN_PRICE).build_transaction(
-            {"from": payer.address, "nonce": w3.eth.get_transaction_count(payer.address, "pending"),
-             "gasPrice": w3.eth.gas_price, "chainId": w3.eth.chain_id})
-        r = w3.eth.wait_for_transaction_receipt(w3.eth.send_raw_transaction(payer.sign_transaction(tx).raw_transaction), timeout=180)
-        assert r.status == 1, "MockComfy launch reverted"
-        out[name] = comfy.events.Launched().process_receipt(r)[0]["args"]["token"]
-    return out
 
 
 class Scenario:
@@ -335,12 +314,7 @@ class Scenario:
         assert any(t["topic_id"] == t1 for t in topics["topics"])
         await self.a["dana"].act("lore_buy", topic_id=t1, confirm=True)
         assert self.reader.call("Access", "hasAccess", t1, self.a["dana"].address)
-        # ... and received each author's comfy tokens, locked in the vault
-        tokens, amounts = self.reader.call("Access", "basket", t1)
-        for token, amount in zip(tokens, amounts):
-            locked, _ = self.reader.call("LockVault", "locks", self.a["dana"].address, token)
-            assert locked == amount > 0, f"Dana's {token} tokens are not locked in the vault"
-        say(f"Dana bought topic {t1}: base to its authors, {len(tokens)} authors' comfy tokens locked for her")
+        say(f"Dana bought topic {t1}: its price went to its authors")
         read = await self.a["dana"].tool("lore_read_topic", topic_id=t1)
         copies = [n["text"] for n in read["nodes"]]
         assert len(copies) == 3 and all(FRAME in c for c in copies), "Dana's copy is not watermarked per node"
@@ -402,13 +376,6 @@ async def main_async(check_only: bool, resume: bool = False) -> None:
         say("Turnkey wallets created and linked to their people on-chain (PersonRegistry)")
         say("funding test agents with 0G (testnet only)")
         await asyncio.to_thread(fund, reader, [a.address for a in agents.values()], 5 * 10**17)
-        tokens = await asyncio.to_thread(launch_tokens, reader, list(agents))
-        payer = Account.from_key(deployer_key())
-        for name, agent in agents.items():
-            ask = await agent.tool("lore_link_token", token=tokens[name])
-            sig = payer.sign_message(encode_defunct(text=ask["sign_this"])).signature.to_0x_hex()
-            await agent.tool("lore_link_token", token=tokens[name], signature=sig)
-        say("each author's comfy token launched (MockComfy) and linked (AuthorTokens)")
         result = await Scenario(reader, agents, tag).run(resume)
         say("END-TO-END PASSED: " + json.dumps(result))
 

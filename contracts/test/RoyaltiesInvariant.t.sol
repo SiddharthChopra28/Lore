@@ -8,8 +8,7 @@ import {Access} from "../src/Access.sol";
 import {Royalties} from "../src/Royalties.sol";
 
 /// @dev Drives random sequences of node additions, sales (at random prices) and claims.
-///      It stands in for Submissions so it can add nodes without the voting flow. tokensPerNode is 0 here,
-///      so a purchase is the base price only: this test is about royalty accounting.
+///      It stands in for Submissions so it can add nodes without the voting flow. This test is about royalty accounting.
 contract RoyaltiesHandler is Test {
     TopicGraph graph;
     Access access;
@@ -44,7 +43,7 @@ contract RoyaltiesHandler is Test {
         if (topics == 0) return;
         uint256 topicId = 1 + topicSeed % topics;
         vm.prank(admin);
-        access.setParams(bound(price, 0, 1_000_000 ether), 0, 10);
+        access.setParams(bound(price, 0, 1_000_000 ether));
         price = access.priceOf(topicId);
 
         address buyer = address(uint160(0xB0000 + ++buyerNonce));
@@ -84,10 +83,9 @@ contract RoyaltiesInvariantTest is Base {
         super.setUp();
         handler = new RoyaltiesHandler(graph, access, royalties, admin);
         graph.setSubmissions(address(handler));
-        access.setParams(access.nodeValue(), 0, 10);
+        access.setParams(access.nodeValue());
         for (uint256 i; i < 4; ++i) {
             _ensurePerson(handler.contributors(i));
-            _ensureToken(handler.contributors(i));
         }
         targetContract(address(handler));
     }
@@ -115,11 +113,10 @@ contract RoyaltiesInvariantTest is Base {
     function testFuzz_distributeConserves(uint256 price, uint8 extraNodes, uint16 cutBps) public {
         cutBps = uint16(bound(cutBps, 0, 10_000));
         royalties.setPlatformCutBps(cutBps);
-        access.setParams(bound(price, 0, 50_000_000 ether), 0, 10);
+        access.setParams(bound(price, 0, 50_000_000 ether));
 
         graph.setSubmissions(address(this));
         _ensurePerson(makeAddr("a"));
-        _ensureToken(makeAddr("a"));
         (uint256 t,) = graph.addNode(0, makeAddr("a"), keccak256("n0"), 0, new uint256[](0));
         uint256 n = 1 + uint256(extraNodes) % 20;
         for (uint256 i = 1; i < n; ++i) {

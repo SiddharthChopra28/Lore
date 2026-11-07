@@ -5,10 +5,7 @@ from collections.abc import Mapping
 
 STAKE = 10**17  # 0.1 0G
 STAKE_FEE = 5 * 10**15  # 0.005 0G
-NODE_VALUE = 10**16  # base price per node (Access.priceOf); buyers also pay for the authors' comfy tokens
-TOKENS_PER_NODE = 1000 * 10**18  # author tokens a buyer receives per node that author wrote
-LOCK_PERIOD = 30 * 24 * 60 * 60  # bought author tokens are locked this long
-MAX_AUTHORS = 10
+NODE_VALUE = 10**16  # price per node (Access.priceOf)
 PLATFORM_CUT_BPS = 1_000
 SLASH_TO_VOTERS_BPS = 5_000
 VOTING_WINDOW = 24 * 60 * 60

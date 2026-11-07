@@ -183,7 +183,7 @@ def test_with_several_wallets_the_person_must_choose(env):
         env.svc.prepare_buy(person(ALICE), 1, wallet=BOB.address)
     tx = env.svc.prepare_buy(person(ALICE), 1, wallet=second.address)["transactions"]
     assert [t["description"] for t in tx] == ["Access.buy"] and tx[0]["from"] == second.address.lower()
-    assert tx[0]["value"] == (env.chain.price + env.chain.token_cost) * 103 // 100  # the quote plus 3% slippage
+    assert tx[0]["value"] == env.chain.price  # the price, exactly
 
 
 # --- reading ---
